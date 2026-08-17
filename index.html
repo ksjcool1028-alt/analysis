@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>자산관리 다차원 분석 대시보드</title>
+  <!-- Google Fonts & FontAwesome -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Chart.js & SheetJS & PapaParse -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Toast Notification Alert Box -->
+  <div id="toastNotification" class="toast-container hidden">
+    <div id="toastContent" class="toast-card glass-panel">
+      <div id="toastIcon" class="toast-icon"></div>
+      <div class="toast-body">
+        <div id="toastTitle" class="toast-title"></div>
+        <div id="toastMessage" class="toast-message"></div>
+        <div id="toastDetail" class="toast-detail hidden"></div>
+      </div>
+      <button id="toastCloseBtn" class="toast-close-btn">&times;</button>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header glass-panel">
+      <div class="header-left">
+        <div class="logo-icon">
+          <i class="fa-solid fa-chart-line"></i>
+        </div>
+        <div>
+          <h1 class="app-title">자산관리 다차원 분석 대시보드</h1>
+          <p class="app-subtitle">시계열 Trend & 평가일 기준 종합 리포팅 시스템 (환매 자동 제외)</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <button id="btnLoadSample" class="btn btn-secondary">
+          <i class="fa-solid fa-database"></i> 샘플 데이터 로드
+        </button>
+        <label for="fileInput" class="btn btn-primary">
+          <i class="fa-solid fa-file-excel"></i> 엑셀/CSV 업로드
+        </label>
+        <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" class="hidden">
+      </div>
+    </header>
+
+    <!-- File Upload Drop Zone -->
+    <section id="dropZone" class="drop-zone glass-panel">
+      <div class="drop-icon">
+        <i class="fa-solid fa-cloud-arrow-up"></i>
+      </div>
+      <h3>엑셀(.xlsx, .xls) 또는 CSV 파일을 끌어다 놓으세요</h3>
+      <p>또는 클릭하여 자산 명세서 파일을 선택하세요 (환매 항목 자동 제외)</p>
+      <div class="upload-badge-list">
+        <span class="badge"><i class="fa-solid fa-shield-halved"></i> 100% 브라우저 로컬 안전 처리</span>
+        <span class="badge badge-redeemed"><i class="fa-solid fa-filter"></i> '환매' 자동 제외 집계</span>
+        <span class="badge"><i class="fa-solid fa-sliders"></i> 섹션별 8개 다중필터</span>
+      </div>
+    </section>
+
+    <!-- Dashboard Main Grid -->
+    <main id="dashboardGrid" class="dashboard-content hidden">
+
+      <!-- ========================================================================== -->
+      <!-- SECTION 1: 누적 성과 (Cumulative Performance) -->
+      <!-- ========================================================================== -->
+      <section class="glass-panel section-container section-sec1">
+        <div class="section-badge-header">
+          <span class="section-badge badge-s1">SECTION 1</span>
+          <h2 class="section-main-title">누적 성과 (2024-02-25 최초원금 vs 선택/최종일 평가액)</h2>
+        </div>
+
+        <!-- Section 1 Filter Bar (8 Multi-Select Dropdowns) -->
+        <div class="inner-filter">
+          <div class="filter-bar">
+            <div class="filter-title">
+              <i class="fa-solid fa-filter"></i> Section 1 전용 8개 다중 선택 필터
+            </div>
+            <div class="filter-controls" id="sec1FilterContainer">
+              <!-- 8 Multi-Select Filters Dynamic Injection -->
+            </div>
+          </div>
+          <div class="sub-control-bar">
+            <label for="sec1DateSelect" class="font-bold text-sm text-cyan-400">
+              <i class="fa-solid fa-calendar-check"></i> 총 평가금액 조회일 선택:
+            </label>
+            <select id="sec1DateSelect" class="form-select compact highlight-filter"></select>
+            <span class="text-xs text-muted">* 투자원금은 2024-02-25 최초일 기준으로 고정 집계됩니다.</span>
+          </div>
+        </div>
+
+        <!-- Section 1 KPIs -->
+        <div class="kpi-grid">
+          <div class="kpi-card glass-panel highlight-blue">
+            <div class="kpi-icon"><i class="fa-solid fa-piggy-bank"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-label">투자원금 (2024-02-25 기준)</span>
+              <span class="kpi-value" id="sec1TotalPrincipal">₩0</span>
+              <span class="kpi-subtext">최초 평가일 원금 기준</span>
+            </div>
+          </div>
+          <div class="kpi-card glass-panel highlight-blue">
+            <div class="kpi-icon"><i class="fa-solid fa-sack-dollar"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-label">총 평가금액 (<span id="sec1SelectedDateLabel">최종일</span>)</span>
+              <span class="kpi-value" id="sec1TotalValuation">₩0</span>
+              <span class="kpi-subtext" id="sec1ValuationSub">보유 종목 잔액 합산</span>
+            </div>
+          </div>
+          <div class="kpi-card glass-panel" id="sec1DiffCard">
+            <div class="kpi-icon"><i class="fa-solid fa-arrow-trend-up"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-label">누적 손익금액</span>
+              <span class="kpi-value" id="sec1TotalDiff">₩0</span>
+              <span class="kpi-subtext">평가금액 - 최초원금</span>
+            </div>
+          </div>
+          <div class="kpi-card glass-panel" id="sec1ReturnCard">
+            <div class="kpi-icon"><i class="fa-solid fa-percent"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-label">누적 수익률</span>
+              <span class="kpi-value" id="sec1TotalReturn">0.00%</span>
+              <span id="sec1ReturnBadge" class="kpi-badge">0.0%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 1 Annual Gain/Loss Table -->
+        <div class="sub-section-title">
+          <i class="fa-solid fa-table-list"></i> 연도별 손익(율) 스냅샷 (전년말 평가금액 vs 당해년도 평가금액)
+        </div>
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>연도 / 기준 구분</th>
+                <th class="text-right">전년말 평가금액 (기준)</th>
+                <th class="text-right">당해년도 평가금액 (말/현재)</th>
+                <th class="text-right">연간 손익금액</th>
+                <th class="text-right">연간 수익률</th>
+                <th>비고</th>
+              </tr>
+            </thead>
+            <tbody id="sec1AnnualTableBody">
+              <!-- Rendered Annual Rows -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ========================================================================== -->
+      <!-- SECTION 2: 누적 시계열 Trend (Time-Series Dual-Axis Trend) -->
+      <!-- ========================================================================== -->
+      <section class="glass-panel section-container section-sec2">
+        <div class="section-badge-header">
+          <span class="section-badge badge-s2">SECTION 2</span>
+          <h2 class="section-main-title">누적 시계열 Trend (김성중 계좌 좌측 Y축 상단 Scale 분리)</h2>
+        </div>
+
+        <!-- Section 2 Filter Bar -->
+        <div class="inner-filter">
+          <div class="filter-bar">
+            <div class="filter-title">
+              <i class="fa-solid fa-filter"></i> Section 2 전용 8개 다중 선택 필터
+            </div>
+            <div class="filter-controls" id="sec2FilterContainer"></div>
+          </div>
+          <div class="sub-control-bar">
+            <label for="sec2EndDateSelect" class="font-bold text-sm text-cyan-400">
+              <i class="fa-solid fa-calendar-day"></i> 시계열 조회 최종일 조정:
+            </label>
+            <select id="sec2EndDateSelect" class="form-select compact highlight-filter"></select>
+
+            <label for="sec2MetricSelect" class="font-bold text-sm text-purple-400 ml-4">
+              <i class="fa-solid fa-chart-line"></i> 표시 데이터:
+            </label>
+            <select id="sec2MetricSelect" class="form-select compact">
+              <option value="평가금액">평가금액 추이</option>
+              <option value="투자원금">투자원금 추이</option>
+              <option value="증감">손익금액 추이</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="chart-guide-alert">
+          <i class="fa-solid fa-circle-info"></i>
+          <span><b>Dual Y-Axis Scale 보정 적용:</b> 원금 규모가 큰 <b>김성중</b>님 계좌는 좌측 Y축(상단 Scale)에 독립 배치되어 우측 3명 계좌선과 겹치지 않고 상단에 명확히 표기됩니다.</span>
+        </div>
+
+        <!-- Time Series Chart Canvas -->
+        <div class="chart-box extra-large-chart">
+          <canvas id="sec2TimeSeriesChart"></canvas>
+        </div>
+      </section>
+
+      <!-- ========================================================================== -->
+      <!-- SECTION 3: 평가일기준 평가 (Multi-Dimensional Evaluation) -->
+      <!-- ========================================================================== -->
+      <section class="glass-panel section-container section-sec3">
+        <div class="section-badge-header">
+          <span class="section-badge badge-s3">SECTION 3</span>
+          <h2 class="section-main-title">평가일기준 평가 (가족 합산 다차원 & 성명별 개별 차트)</h2>
+        </div>
+
+        <!-- Section 3 Filter Bar -->
+        <div class="inner-filter">
+          <div class="filter-bar">
+            <div class="filter-title">
+              <i class="fa-solid fa-filter"></i> Section 3 전용 8개 다중 선택 필터
+            </div>
+            <div class="filter-controls" id="sec3FilterContainer"></div>
+          </div>
+          <div class="sub-control-bar">
+            <label for="sec3DateSelect" class="font-bold text-sm text-cyan-400">
+              <i class="fa-solid fa-calendar-week"></i> 평가 기준일 선택:
+            </label>
+            <select id="sec3DateSelect" class="form-select compact highlight-filter"></select>
+            <span class="text-xs text-muted">* 선택한 평가일 기준의 원금 및 평가액으로 상단/하단 모든 그래프가 연동됩니다.</span>
+          </div>
+        </div>
+
+        <!-- Section 3 KPIs -->
+        <div class="kpi-grid">
+          <div class="kpi-card glass-panel highlight-blue">
+            <div class="kpi-icon"><i class="fa-solid fa-vault"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-label">선택 평가일 총 평가액</span>
+              <span class="kpi-value" id="sec3TotalValuation">₩0</span>
+              <span class="kpi-subtext" id="sec3ValuationSub">보유 종목 합산</span>
+            </div>
+          </div>
+          <div class="kpi-card glass-panel highlight-blue">
+            <div class="kpi-icon"><i class="fa-solid fa-coins"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-label">선택 평가일 총 투자원금</span>
+              <span class="kpi-value" id="sec3TotalPrincipal">₩0</span>
+              <span class="kpi-subtext">해당 평가일 매수원금 합계</span>
+            </div>
+          </div>
+          <div class="kpi-card glass-panel" id="sec3DiffCard">
+            <div class="kpi-icon"><i class="fa-solid fa-scale-balanced"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-label">평가 손익금액</span>
+              <span class="kpi-value" id="sec3TotalDiff">₩0</span>
+              <span class="kpi-subtext">평가액 - 원금</span>
+            </div>
+          </div>
+          <div class="kpi-card glass-panel" id="sec3ReturnCard">
+            <div class="kpi-icon"><i class="fa-solid fa-percent"></i></div>
+            <div class="kpi-info">
+              <span class="kpi-label">평가 수익률</span>
+              <span class="kpi-value" id="sec3TotalReturn">0.00%</span>
+              <span id="sec3ReturnBadge" class="kpi-badge">0.0%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3-A. 상단: 가족 합산 다차원 분석 (피벗 + 차트) -->
+        <div class="sub-section-title">
+          <i class="fa-solid fa-users"></i> 3-A. 가족 합산 다차원 분석 (동적 피벗 & 가족 통합 비중)
+        </div>
+
+        <!-- 2단계 피벗 세부 설정 제어 바 -->
+        <div class="inner-filter mb-3">
+          <div class="filter-bar p-3">
+            <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+              <div class="filter-title text-cyan-300">
+                <i class="fa-solid fa-sliders"></i> 2단계 피벗 제어 (Row 컬럼 다중 선택 + Row내 세부 Value 선택)
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-muted font-bold">집계 (Value):</span>
+                <select id="pivotMetricSelect" class="form-select compact highlight-filter">
+                  <option value="평가금액">평가금액</option>
+                  <option value="투자원금">투자원금</option>
+                  <option value="증감">손익금액</option>
+                  <option value="수익률">수익률(%)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="flex items-start gap-4 flex-wrap">
+              <!-- (1) 피벗 그룹 컬럼(Row) 선택 -->
+              <div class="filter-group dropdown-multi">
+                <label class="font-bold text-xs text-indigo-300">1. 피벗 그룹 컬럼 (Row 항목 선택)</label>
+                <div id="pivotRowMultiContainer"></div>
+              </div>
+
+              <!-- (2) 선택된 피벗 Row내 세부 Value 선택 컨테이너 -->
+              <div class="flex-1 flex flex-col gap-1">
+                <label class="font-bold text-xs text-cyan-300">2. 선택된 Row내 세부 Value 선택 (포함/제외 필터)</label>
+                <div id="pivotRowValuesContainer" class="flex flex-wrap gap-2"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="two-column-grid">
+          <!-- Dynamic Pivot Table Panel -->
+          <div class="glass-panel p-4">
+            <div class="flex justify-between items-center mb-3">
+              <span class="font-bold text-sm text-cyan-400">
+                <i class="fa-solid fa-table-cells"></i> 동적 피벗 집계 결과표 (컬럼 클릭 시 정렬)
+              </span>
+            </div>
+            
+            <div class="table-responsive pivot-table-container">
+              <table class="custom-table data-table" id="pivotDataTable">
+                <thead>
+                  <tr>
+                    <th data-pivot-sort="key">그룹 조합 항목 (Row) <i class="fa-solid fa-sort"></i></th>
+                    <th data-pivot-sort="principal" class="text-right">투자원금 <i class="fa-solid fa-sort"></i></th>
+                    <th data-pivot-sort="valuation" class="text-right">평가금액 <i class="fa-solid fa-sort"></i></th>
+                    <th data-pivot-sort="diff" class="text-right">손익금액 <i class="fa-solid fa-sort"></i></th>
+                    <th data-pivot-sort="returnRate" class="text-right">수익률 <i class="fa-solid fa-sort"></i></th>
+                    <th data-pivot-sort="ratio" class="text-right">비중 (%) <i class="fa-solid fa-sort"></i></th>
+                  </tr>
+                </thead>
+                <tbody id="pivotTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Family Allocation Chart Panel -->
+          <div class="glass-panel p-4">
+            <div class="flex justify-between items-center mb-3">
+              <span class="font-bold text-sm text-cyan-400">
+                <i class="fa-solid fa-chart-pie"></i> 가족 통합 포트폴리오 비중 (X축 90도 수직 표기)
+              </span>
+              <div class="chart-tab-buttons">
+                <button class="tab-btn active" data-tab="donut">도넛비중</button>
+                <button class="tab-btn" data-tab="bar">평가금액</button>
+                <button class="tab-btn" data-tab="returnRank">수익률순위</button>
+              </div>
+            </div>
+            <div class="scrollable-chart-box" id="familyChartScrollBox">
+              <div class="chart-box medium-chart" id="familyChartInnerWrapper">
+                <canvas id="familyAllocationChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3-B. 하단: 성명별 자산 분포 그래프 (Per-Person Charts Grid) -->
+        <div class="sub-section-title mt-4">
+          <i class="fa-solid fa-user-group"></i> 3-B. 성명별 개별 자산 분포 차트 (X축 90도 수직 표기)
+        </div>
+        <div class="person-grid" id="personChartsGrid">
+          <!-- Per-Person Individual Chart Cards Injected Here -->
+        </div>
+
+        <!-- Raw Data Detailed Table -->
+        <div class="sub-section-title mt-4">
+          <i class="fa-solid fa-list-check"></i> Raw Data 상세 명세서 (환매 데이터 구분 표기)
+        </div>
+        
+        <div class="table-actions mb-2">
+          <div class="search-input-wrapper">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" id="tableSearchInput" class="search-input" placeholder="상품명, 성명, 운용사 검색...">
+          </div>
+          <button id="btnExportExcel" class="btn btn-outline">
+            <i class="fa-solid fa-file-export"></i> 엑셀 리포트 내보내기
+          </button>
+        </div>
+
+        <div class="table-responsive raw-table-container">
+          <table class="custom-table data-table" id="rawDataTable">
+            <thead>
+              <tr>
+                <th data-sort="평가일">평가일 <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="운용사">운용사 <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="성명">성명 <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="구분">구분 <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="구분2">구분2 <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="구분3">구분3 <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="국내외">국내외 <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="국가_상품">국가_상품 <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="투자상품">투자상품 <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="투자원금" class="text-right">투자원금 <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="평가금액" class="text-right">평가금액 <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="증감" class="text-right">증감 <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="수익률" class="text-right">수익률 <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="환매여부">환매여부 <i class="fa-solid fa-sort"></i></th>
+                <th>비고</th>
+              </tr>
+            </thead>
+            <tbody id="rawDataTableBody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer" id="tableRecordCount">조회 데이터: 총 0건</div>
+
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>Asset Management Multi-Dimensional Analytics Dashboard &copy; 2026. Premium Dark Glassmorphic Design System.</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
